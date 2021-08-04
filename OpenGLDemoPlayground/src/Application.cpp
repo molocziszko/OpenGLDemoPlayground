@@ -6,6 +6,12 @@
 #include <string>
 #include <sstream>
 
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void processInput(GLFWwindow* window);
+
+const unsigned int screen_width = 800;
+const unsigned int screen_height = 600;
+
 struct ShaderProgramSource
 {
     std::string VertexSource;
@@ -44,12 +50,12 @@ static ShaderProgramSource ParseShaider(const std::string& filepath)
 
 static unsigned int CompileShader(unsigned int type, const std::string& source)
 {
-    unsigned int id = glCreateShader(type);
+    const unsigned int id = glCreateShader(type);
     const char* src = source.c_str();
     glShaderSource(id, 1, &src, nullptr);
     glCompileShader(id);
 
-    int result;
+    int result = 0;
     glGetShaderiv(id, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE)
     {
@@ -68,9 +74,9 @@ static unsigned int CompileShader(unsigned int type, const std::string& source)
 
 static unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader)
 {
-    unsigned int program = glCreateProgram();
-    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
-    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
+    const unsigned int program = glCreateProgram();
+    const unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
+    const unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
 
     glAttachShader(program, vs);
     glAttachShader(program, fs);
@@ -83,12 +89,6 @@ static unsigned int CreateShader(const std::string& vertexShader, const std::str
     return program;
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void processInput(GLFWwindow* window);
-
-const unsigned int SCREEN_WIDTH =   800;
-const unsigned int SCREEN_HEIGHT =  600;
-
 int main(void)
 {
     GLFWwindow* window;
@@ -99,7 +99,7 @@ int main(void)
    
 
     /* Create a windowed mode window and its OpenGL context */
-    window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Welcome to OpenGLDemoPlayground", NULL, NULL);
+    window = glfwCreateWindow(screen_width, screen_height, "Welcome to OpenGLDemoPlayground", NULL, NULL);
     if (!window)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -116,22 +116,34 @@ int main(void)
 
     std::cout << glGetString(GL_VERSION) << std::endl;  
 
-    float positions[6] = {
-        -0.5f, -0.5f,
-         0.0f,  0.5f,
-         0.5f, -0.5f
+    // using index buffer for square
+    const float positions[] = {
+        -0.5f, -0.5f,   // 0
+         0.5f, -0.5f,   // 1
+         0.5f,  0.5f,   // 2       
+        -0.5f,  0.5f    // 3    
+    };
+
+    unsigned int indices[] = {
+        0, 1, 2,
+        2, 3, 0
     };
 
     unsigned int buffer;
     glGenBuffers(1, &buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffer); 
-    glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float), positions, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 6 * 2 * sizeof(float), positions, GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
 
+    unsigned int ibo;   // "index buffer object"
+    glGenBuffers(1, &ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+
     ShaderProgramSource source = ParseShaider("res/shaders/Basic.shader");
-    unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
+    const unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
     glUseProgram(shader);
 
     /* Loop until the user closes the window */
@@ -144,7 +156,7 @@ int main(void)
         glClearColor(0.2f, 0.1f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
         
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
