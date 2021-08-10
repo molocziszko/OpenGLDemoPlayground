@@ -1,10 +1,13 @@
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include <glew.h>
+#include <glfw3.h>
 
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
+
+#include "ErrorChecker.h"
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow* window);
@@ -22,7 +25,7 @@ static ShaderProgramSource ParseShaider(const std::string& filepath)
 {
     std::ifstream stream(filepath);
 
-    enum ShaderType
+    enum class ShaderType
     {
         NONE = -1, VERTEX = 0, FRAGMENT = 1
     };
@@ -60,7 +63,7 @@ static unsigned int CompileShader(unsigned int type, const std::string& source)
     if (result == GL_FALSE)
     {
         int length = 0;
-        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length); 
+        glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
         char* message = (char*)_alloca(length * sizeof(char));
         glGetShaderInfoLog(id, length, &length, message);
         std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shaider!" << std::endl;
@@ -96,6 +99,10 @@ int main(void)
     /* Initialize the library */
     if (!glfwInit())
         return -1;
+
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
    
 
     /* Create a windowed mode window and its OpenGL context */
@@ -110,6 +117,8 @@ int main(void)
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK)
         std::cout << "glewInit failed, something is seriously wrong." << std::endl;
@@ -129,22 +138,38 @@ int main(void)
         2, 3, 0
     };
 
+    unsigned int VAO;
+    GLCall(glGenVertexArrays(1, &VAO));
+    GLCall(glBindVertexArray(VAO));
+
     unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer); 
-    glBufferData(GL_ARRAY_BUFFER, 6 * 2 * sizeof(float), positions, GL_STATIC_DRAW);
+    GLCall(glGenBuffers(1, &buffer));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, buffer));
+    GLCall(glBufferData(GL_ARRAY_BUFFER, 4 * 2 * sizeof(float), positions, GL_STATIC_DRAW));
 
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
+    GLCall(glEnableVertexAttribArray(0));
+    GLCall(glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0));
 
-    unsigned int ibo;   // "index buffer object"
-    glGenBuffers(1, &ibo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(unsigned int), indices, GL_STATIC_DRAW);
+    unsigned int IBO;   // "index buffer object"
+    GLCall(glGenBuffers(1, &IBO));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO));
+    GLCall(glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6 * sizeof(unsigned int), indices, GL_STATIC_DRAW));
 
     ShaderProgramSource source = ParseShaider("res/shaders/Basic.shader");
     const unsigned int shader = CreateShader(source.VertexSource, source.FragmentSource);
-    glUseProgram(shader);
+    GLCall(glUseProgram(shader));
+
+    GLCall(int location = glGetUniformLocation(shader, "u_Color"));
+    ASSERT(location != -1);
+    GLCall(glUniform4f(location, 0.6f, 0.1f, 0.4f, 1.0f));
+
+    GLCall(glBindVertexArray(0));
+    GLCall(glUseProgram(0));
+    GLCall(glBindBuffer(GL_ARRAY_BUFFER, 0));
+    GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0));
+
+    float red = 0.0f;
+    float increment = 0.05f;
 
     /* Loop until the user closes the window */
     while (!glfwWindowShouldClose(window))
@@ -153,10 +178,24 @@ int main(void)
         processInput(window);
 
         /* Render here */
-        glClearColor(0.2f, 0.1f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        GLCall(glClearColor(0.2f, 0.1f, 0.3f, 1.0f));
+        GLCall(glClear(GL_COLOR_BUFFER_BIT));
 
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+        GLCall(glUseProgram(shader));
+        GLCall(glUniform4f(location, red, 0.1f, 0.4f, 1.0f));
+
+        GLCall(glBindVertexArray(VAO));
+
+        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO));
+        
+        GLCall(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr));
+
+        if (red > 1.0f)
+            increment = -0.05f;
+        else if (red < 0.0f)
+            increment = 0.05f;
+
+        red += increment;
         
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
